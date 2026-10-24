@@ -288,8 +288,8 @@ def sample_data():
 # ----------------------------------------------------------------------------
 # Streamlit UI
 # ----------------------------------------------------------------------------
-st.set_page_config(page_title="HR Attendance Comparison", page_icon="🗓️", layout="wide")
-st.title("🗓️ HR Attendance Comparison")
+st.set_page_config(page_title="AI-Attend", page_icon="🗓️", layout="wide")
+st.title("🗓️ AI-Attend")
 st.caption("Compare planned shifts with actual clock-ins, get an AI executive summary and draft emails (Hebrew).")
 
 with st.sidebar:
