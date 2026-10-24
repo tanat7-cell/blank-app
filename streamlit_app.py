@@ -2,9 +2,12 @@
 HR Attendance Comparison – Planned Shifts vs. Actual Clock-ins
 ==============================================================
 
+The app only DISPLAYS results on screen: tables, an executive summary and draft emails.
+It has no export / save / download features.
+
 HOW TO RUN LOCALLY
 ------------------
-1. pip install streamlit pandas openpyxl anthropic     (anthropic/openai are optional)
+1. pip install streamlit pandas            (optionally: anthropic or openai for real AI)
 2. streamlit run app.py
 
 HOW TO DEPLOY ON STREAMLIT COMMUNITY CLOUD
@@ -13,18 +16,18 @@ HOW TO DEPLOY ON STREAMLIT COMMUNITY CLOUD
    requirements.txt:
        streamlit
        pandas
-       openpyxl
-       anthropic
+       anthropic        # optional, only for real AI
+   (Add `openpyxl` ONLY if you want to upload .xlsx files. CSV uploads need nothing extra.)
 2. Go to https://share.streamlit.io -> "New app" -> pick the repo and app.py.
 3. (Optional, for real AI) In the app's Settings -> Secrets add:
        ANTHROPIC_API_KEY = "sk-ant-..."
    or  OPENAI_API_KEY = "sk-..."
    Without a key the app uses a built-in mock AI that still produces a Hebrew summary.
 
-EXPECTED FILE FORMAT (CSV or Excel)
------------------------------------
+EXPECTED FILE FORMAT (CSV, or Excel if openpyxl is installed)
+-------------------------------------------------------------
 Each file needs an "Employee ID" and/or "Name" column. Hebrew/English headers are
-recognised (e.g. "מספר עובד", "שם עובד"). An optional "Email" column is used in drafts.
+recognised (e.g. "מספר עובד", "שם עובד"). An optional "Email" column is shown in drafts.
 Other columns (shift time, clock-in time, department...) are kept and displayed.
 """
 
@@ -59,7 +62,13 @@ def read_any(uploaded) -> pd.DataFrame:
     """Read an uploaded CSV / Excel file into a DataFrame (all values as text)."""
     name = uploaded.name.lower()
     if name.endswith((".xlsx", ".xls")):
-        return pd.read_excel(uploaded, dtype=str)
+        try:
+            return pd.read_excel(uploaded, dtype=str)
+        except ImportError:
+            raise ValueError(
+                f"Reading '{uploaded.name}' requires the 'openpyxl' package. "
+                "Either add `openpyxl` to requirements.txt or upload the file as CSV."
+            )
     raw = uploaded.getvalue()
     for enc in ("utf-8-sig", "cp1255", "latin-1"):  # cp1255 = Windows Hebrew
         try:
@@ -261,15 +270,6 @@ def rtl_block(text: str):
     )
 
 
-def to_excel(matched, missing, unplanned) -> bytes:
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="openpyxl") as w:
-        matched.to_excel(w, "Matched", index=False)
-        missing.to_excel(w, "Missing", index=False)
-        unplanned.to_excel(w, "Unplanned", index=False)
-    return buf.getvalue()
-
-
 def sample_data():
     planned = pd.DataFrame({
         "Employee ID": ["101", "102", "103", "104", "105"],
@@ -290,7 +290,7 @@ def sample_data():
 # ----------------------------------------------------------------------------
 st.set_page_config(page_title="HR Attendance Comparison", page_icon="🗓️", layout="wide")
 st.title("🗓️ HR Attendance Comparison")
-st.caption("Compare planned shifts with actual clock-ins, get an AI executive summary and ready-to-send emails (Hebrew).")
+st.caption("Compare planned shifts with actual clock-ins, get an AI executive summary and draft emails (Hebrew).")
 
 with st.sidebar:
     st.header("Settings")
@@ -352,12 +352,6 @@ with tab_tables:
     st.dataframe(missing, use_container_width=True, hide_index=True)
     st.subheader("❓ Unplanned – clocked in but not scheduled")
     st.dataframe(unplanned, use_container_width=True, hide_index=True)
-    st.download_button(
-        "⬇️ Download results (Excel)",
-        data=to_excel(matched, missing, unplanned),
-        file_name=f"attendance_comparison_{report_date.replace('/', '-')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
 
 with tab_ai:
     if st.button("Generate executive summary", type="primary"):
@@ -365,8 +359,6 @@ with tab_ai:
             st.session_state["summary"] = generate_executive_summary(matched, missing, unplanned, report_date)
     if "summary" in st.session_state:
         rtl_block(st.session_state["summary"])
-        st.caption("Tip: use the copy icon in the box below.")
-        st.code(st.session_state["summary"], language=None)
 
 with tab_mail:
     def render_emails(kind: str, df: pd.DataFrame):
@@ -381,7 +373,7 @@ with tab_mail:
                 st.text("Subject:")
                 st.code(subject, language=None)
                 st.text("Body:")
-                st.code(body, language=None)  # built-in copy button
+                st.code(body, language=None)  # built-in copy icon for the manager
 
     sub1, sub2 = st.tabs([f"❌ Missing ({len(missing)})", f"❓ Unplanned ({len(unplanned)})"])
     with sub1:
